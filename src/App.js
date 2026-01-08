@@ -2,21 +2,24 @@ import React, { useEffect, useState } from 'react';
 import { getBonds, createBond, updateBond, deleteBond } from './api';
 import BondList from './components/BondList';
 import BondForm from './components/BondForm';
-import CashflowUploader from './components/CashflowUploader';
+import './style.css';
 
 function App() {
   const [bonds, setBonds] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [selectedBond, setSelectedBond] = useState(null);
 
   async function load() {
+    setLoading(true);
     try {
       const rows = await getBonds();
       setBonds(rows);
     } catch (e) {
       console.error(e);
       alert('Failed to load bonds');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -43,7 +46,6 @@ function App() {
     try {
       await deleteBond(id);
       load();
-      if (selectedBond && selectedBond.id === id) setSelectedBond(null);
     } catch (e) {
       console.error(e);
       alert('Delete failed');
@@ -51,33 +53,32 @@ function App() {
   }
 
   return (
-    <div style={{ padding: 20, maxWidth: 1000, margin: '0 auto' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div className="app-container">
+      <header>
         <h1>CRUD Bonds</h1>
         <div>
-          <button onClick={() => { setEditing({}); setShowForm(true); }}>+ New Bond</button>
+          <button className="btn btn-success" onClick={() => { setEditing({}); setShowForm(true); }}>+ New Bond</button>
         </div>
       </header>
 
       <main>
-        <section style={{ marginTop: 12 }}>
-          <BondList
-            bonds={bonds}
-            onEdit={(b) => { setEditing(b); setShowForm(true); }}
-            onDelete={handleDelete}
-            onSelect={(b) => setSelectedBond(b)}
-          />
+        <section>
+          {loading ? <div className="loading">Loading bonds...</div> : (
+            <BondList
+              bonds={bonds}
+              onEdit={(b) => { setEditing(b); setShowForm(true); }}
+              onDelete={handleDelete}
+            />
+          )}
         </section>
 
         {showForm && (
-          <section style={{ marginTop: 12 }}>
-            <BondForm initial={editing} onSave={handleSave} onCancel={() => { setShowForm(false); setEditing(null); }} />
-          </section>
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <BondForm initial={editing} onSave={handleSave} onCancel={() => { setShowForm(false); setEditing(null); }} />
+            </div>
+          </div>
         )}
-
-        <section style={{ marginTop: 24 }}>
-          <CashflowUploader bond={selectedBond} />
-        </section>
       </main>
     </div>
   );

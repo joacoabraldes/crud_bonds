@@ -20,6 +20,9 @@ export const deleteBond = (id) => request(`/bonds/${id}`, { method: 'DELETE' });
 export const getCashflows = (bondId) => request(`/bonds/${bondId}/cashflows`);
 export const createCashflow = (bondId, cf) => request(`/bonds/${bondId}/cashflows`, { method: 'POST', body: JSON.stringify(cf) });
 
+export const getIndexes = () => request('/indexes');
+export const getDayCountConventions = () => request('/day-count-conventions');
+
 // CSV upload: formData
 export async function uploadCashflowsCsv(bondId, file) {
   const fd = new FormData();
