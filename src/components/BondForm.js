@@ -1,19 +1,48 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { getIndexes, getDayCountConventions } from '../api';
 
 export default function BondForm({ initial = {}, onSave, onCancel }) {
-  const [form, setForm] = useState({ ticker: '', name: '', issue_date: '', maturity: '', coupon: 0, index_code: null, offset_days: 0, day_count_conv_id: '', ...initial });
+  // Inicializar con defaults para evitar uncontrolled -> controlled warnings
+  const [form, setForm] = useState({
+    id: '',
+    ticker: '',
+    issue_date: '',
+    maturity: '',
+    coupon: 0,
+    index_code: '',
+    offset_days: 0,
+    day_count_conv_id: ''
+  });
   const [indexOptions, setIndexOptions] = useState([]);
   const [conventionOptions, setConventionOptions] = useState([]);
 
-  useEffect(() => setForm({ ...form, ...initial }), [initial]);
+  // Helper para normalizar fechas (string ISO o Date)
+  useEffect(() => {
+    const dateToString = (date) => {
+      if (!date) return '';
+      if (typeof date === 'string') return date.split('T')[0];
+      if (date instanceof Date && !isNaN(date)) return date.toISOString().split('T')[0];
+      return '';
+    };
+
+    setForm({
+      id: initial.id || '',
+      ticker: initial.ticker || '',
+      issue_date: dateToString(initial.issue_date),
+      maturity: dateToString(initial.maturity),
+      coupon: initial.coupon ?? 0,
+      index_code: initial.index_code ?? '',
+      offset_days: initial.offset_days ?? 0,
+      day_count_conv_id: initial.day_count_conv_id ?? ''
+    });
+  }, [initial]);
 
   useEffect(() => {
     async function loadOptions() {
       try {
         const [indexes, conventions] = await Promise.all([getIndexes(), getDayCountConventions()]);
-        setIndexOptions(indexes);
-        setConventionOptions(conventions);
+        setIndexOptions(indexes || []);
+        setConventionOptions(conventions || []);
       } catch (e) {
         console.error('Failed to load options', e);
       }
@@ -22,26 +51,39 @@ export default function BondForm({ initial = {}, onSave, onCancel }) {
   }, []);
 
   function change(e) {
-    const { name, value } = e.target;
+    const { name, value, type } = e.target;
+    // mantener todo como strings en el form — en onSave ya convertimos los números
     setForm(f => ({ ...f, [name]: value }));
   }
 
   function submit(e) {
     e.preventDefault();
-    onSave({ ...form, coupon: Number(form.coupon), offset_days: Number(form.offset_days) });
+    if (form.issue_date && form.maturity && form.issue_date >= form.maturity) {
+      alert('Maturity date must be after Issue date');
+      return;
+    }
+    onSave({
+      ...form,
+      coupon: Number(form.coupon),
+      offset_days: Number(form.offset_days)
+    });
+  }
+
+  // Helper para renderizar opciones de índice (puede venir string o object)
+  function renderIndexOption(opt) {
+    if (!opt && opt !== '') return null;
+    if (typeof opt === 'string') return { value: opt, label: opt };
+    // si es objeto, intentar usar code o name
+    return { value: opt.code ?? opt.name ?? '', label: opt.code ?? opt.name ?? String(opt) };
   }
 
   return (
     <div>
-      <h2>{initial.id ? 'Edit Bond' : 'New Bond'}</h2>
+      <h2>{form.id ? 'Edit Bond' : 'New Bond'}</h2>
       <form onSubmit={submit}>
         <div className="form-group">
           <label>Ticker</label>
           <input name="ticker" value={form.ticker} onChange={change} required />
-        </div>
-        <div className="form-group">
-          <label>Name</label>
-          <input name="name" value={form.name} onChange={change} />
         </div>
         <div className="form-group">
           <label>Issue Date</label>
@@ -59,7 +101,10 @@ export default function BondForm({ initial = {}, onSave, onCancel }) {
           <label>Index Code</label>
           <select name="index_code" value={form.index_code || ''} onChange={change}>
             <option value="">None</option>
-            {indexOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            {indexOptions.map((optRaw, i) => {
+              const opt = renderIndexOption(optRaw);
+              return <option key={i + '_' + opt.value} value={opt.value}>{opt.label}</option>;
+            })}
           </select>
         </div>
         <div className="form-group">
@@ -70,7 +115,11 @@ export default function BondForm({ initial = {}, onSave, onCancel }) {
           <label>Day Count Convention</label>
           <select name="day_count_conv_id" value={form.day_count_conv_id} onChange={change} required>
             <option value="">Select Convention</option>
-            {conventionOptions.map(opt => <option key={opt.id} value={opt.id}>{opt.code} - {opt.description}</option>)}
+            {conventionOptions.map(opt =>
+              <option key={opt.id} value={opt.id}>
+                {opt.code}{opt.description ? ` - ${opt.description}` : ''}
+              </option>
+            )}
           </select>
         </div>
         <div className="form-actions">

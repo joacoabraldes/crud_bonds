@@ -72,3 +72,12 @@ Este proyecto se desarrollará en **React** (Vite) y consumirá un servicio/API 
 - indextype valide contra indice y null
 - offset <=0  y no puede ser punto flotante
 - day count valide contra day_count_convention
+
+- ver de que las variables de entorno esten bien seteadas en formato una por una 
+- chequear fechas entre cashflows que en cada secuencia la fecha sea mayor a la anterior por al menos un dia
+- que insertar un cashflow tenga el mismo formato de tabla que como se muestra en la vista de cashflows asi es mas comodo para el usuario
+- fijarse que al editar un bono el name y la fecha no se toman y deberian (es decir se resetean a vacio cuando no deberian)
+- que los cashflows se muestren ordenadas por fecha en vez de por secuencia (deberia dar el mismo resultado pero ayuda a spotear errores)
+- agregar buscador por ticker en la vista de bonos
+- agregar paginacion en la vista de bonos si hay mas de X bonos (ej20)
+- que los cashflows que ya esten tmb se puedan editar y que al guardar se manden todos a la base de datos (actualmente solo se pueden agregar nuevos)
