@@ -23,18 +23,6 @@ export const createCashflow = (bondId, cf) => request(`/bonds/${bondId}/cashflow
 export const getIndexes = () => request('/indexes');
 export const getDayCountConventions = () => request('/day-count-conventions');
 
-// CSV upload: formData
-export async function uploadCashflowsCsv(bondId, file) {
-  const fd = new FormData();
-  fd.append('file', file);
-  const res = await fetch(`${API_BASE}/bonds/${bondId}/cashflows/bulk`, { method: 'POST', body: fd });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || res.statusText);
-  }
-  return res.json();
-}
-
 export async function uploadCashflowsJson(bondId, arr) {
   const res = await fetch(`${API_BASE}/bonds/${bondId}/cashflows/bulk-json`, {
     method: 'POST',

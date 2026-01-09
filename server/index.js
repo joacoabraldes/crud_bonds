@@ -1,8 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const multer = require('multer');
-const { parse } = require('csv-parse/sync');
 const { Pool } = require('pg');
 
 const app = express();
@@ -17,8 +15,6 @@ const pool = new Pool({
 pool.on('error', (err, client) => {
   console.error('Unexpected error on idle client', err);
 });
-
-const upload = multer(); // for multipart/form-data CSV upload
 
 // Initialize auto-increment sequence for mock_bonds
 async function initializeSequence() {
@@ -95,29 +91,46 @@ app.get('/bonds/:id', async (req, res) => {
   }
 });
 
-// create bond
+// create bond — always assign id = MAX(id) + 1 (safe under lock)
 app.post('/bonds', async (req, res) => {
-  // frontend may send: ticker, name, issue_date, maturity, coupon, index_code, offset_days, day_count_conv_id, active
   const { ticker, issue_date, maturity, coupon, index_code, offset_days, day_count_conv_id, active } = req.body;
+  const client = await pool.connect();
   try {
-    // resolve index_type_id from index_code if provided
+    await client.query('BEGIN');
+
+    // Resolve index_type_id from index_code if provided
     let index_type_id = null;
     if (index_code) {
-      const r = await pool.query('SELECT id FROM mock_index_types WHERE code = $1 LIMIT 1', [index_code]);
+      const r = await client.query('SELECT id FROM mock_index_types WHERE code = $1 LIMIT 1', [index_code]);
       if (r.rows[0]) index_type_id = r.rows[0].id;
     }
 
+    // Lock table and compute new id = max(id) + 1 atomically
+    await client.query('LOCK TABLE mock_bonds IN EXCLUSIVE MODE');
+    const maxRes = await client.query('SELECT COALESCE(MAX(id), 0) + 1 AS nid FROM mock_bonds');
+    const newId = maxRes.rows[0].nid;
+
+    // Insert specifying the id explicitly
     const q = `INSERT INTO mock_bonds
-      (ticker, issue_date, maturity, coupon, index_type_id, "offset", day_count_conv, active, created_at, updated_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8, now(), now())
+      (id, ticker, issue_date, maturity, coupon, index_type_id, "offset", day_count_conv, active, created_at, updated_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, now(), now())
       RETURNING id, ticker, issue_date, maturity, coupon, index_type_id, "offset" AS offset_days, day_count_conv AS day_count_conv_id, active, created_at, updated_at`;
-    const { rows } = await pool.query(q, [ticker, issue_date, maturity, coupon, index_type_id, offset_days, day_count_conv_id, active !== undefined ? active : true]);
-    res.status(201).json(rows[0]);
+    const values = [newId, ticker, issue_date, maturity, coupon, index_type_id, offset_days, day_count_conv_id, active !== undefined ? active : true];
+
+    const insertRes = await client.query(q, values);
+
+    await client.query('COMMIT');
+    res.status(201).json(insertRes.rows[0]);
   } catch (err) {
-    console.error(err);
-    res.status(400).json({ error: err.message });
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Error creating bond:', err);
+    res.status(400).json({ error: err.message || String(err) });
+  } finally {
+    client.release();
   }
 });
+
+
 
 // update bond
 app.put('/bonds/:id', async (req, res) => {
